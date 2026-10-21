@@ -367,6 +367,6 @@ export async function tageslauf(stichtag = heute()): Promise<Tageslaufbericht> {
     if (a) aktionen.push(a);
   }
 
-  repo.protokolliere({ typ: "tageslauf", akteur: "system", data: { stichtag, aktionen: aktionen.length } });
+  if (aktionen.length) repo.protokolliere({ typ: "tageslauf", akteur: "system", data: { stichtag, aktionen } });
   return { stichtag, aktionen };
 }
