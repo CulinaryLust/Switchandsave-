@@ -1,0 +1,40 @@
+# Render Blueprint: Web-Service mit dauerhafter Festplatte (Frankfurt) und täglichem Cron-Lauf.
+# Einrichtung siehe DEPLOY.md
+services:
+  - type: web
+    name: switchandsave
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /
+    disk:
+      name: daten
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: CHECK24_PARTNER_ID
+        sync: false
+
+  - type: cron
+    name: switchandsave-tageslauf
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    schedule: "0 5 * * *"
+    dockerfilePath: ./Dockerfile.cron
+    envVars:
+      - key: APP_URL
+        sync: false
+      - key: CRON_SECRET
+        fromService:
+          type: web
+          name: switchandsave
+          envVarKey: CRON_SECRET
