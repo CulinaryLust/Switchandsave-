@@ -1,0 +1,3 @@
+# Ruft täglich den Tageslauf der Web-App auf.
+FROM curlimages/curl:8.10.1
+CMD ["sh", "-c", "curl -fsS \"$APP_URL/api/cron/daily?secret=$CRON_SECRET\""]
