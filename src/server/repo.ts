@@ -3,6 +3,7 @@ import type { Fristen } from "@/domain/fristen";
 import type { AbschlusskanalId, BestandsVertrag, Kostenaufstellung, Verbrauchsstelle } from "@/domain/types";
 import type { Akteur, Modus, Status } from "@/domain/wechselfall";
 import { getDb } from "./db";
+import { entschluesseln, verschluesseln } from "./sicherheit/verschluesselung";
 
 export interface Kunde {
   id: string;
@@ -13,9 +14,10 @@ export interface Kunde {
   email: string;
   telefon?: string;
   geburtsdatum: string;
-  /** IBAN wird nur maskiert gespeichert und erst bei Übermittlung im Vollmachtsmodus benötigt. */
+  /** Anzeige im Konto, z.B. "DE02 •••• •••• 2051" */
   ibanMaskiert?: string;
-  iban?: string;
+  /** AES-256-GCM-verschlüsselt, wird nur bei der Übermittlung an den Abschlusskanal entschlüsselt */
+  ibanVerschluesselt?: string;
   modus: Modus;
   /** Dauerauftrag: Kundenfreigabe erfolgt automatisch, wenn die Ersparnis mindestens so hoch ist */
   autoFreigabeAbEur?: number;
@@ -76,8 +78,12 @@ type Row = Record<string, unknown>;
 
 // Kunden
 
-export function kundeAnlegen(daten: Omit<Kunde, "id" | "token" | "erstelltAm">): Kunde {
+export type NeuerKunde = Omit<Kunde, "id" | "token" | "erstelltAm" | "ibanVerschluesselt"> & { iban?: string };
+
+export function kundeAnlegen(eingabe: NeuerKunde): Kunde {
+  const { iban, ...daten } = eingabe;
   const kunde: Kunde = { ...daten, id: randomUUID(), token: randomBytes(24).toString("base64url"), erstelltAm: jetzt() };
+  if (iban) kunde.ibanVerschluesselt = verschluesseln(iban);
   getDb().prepare("INSERT INTO kunden (id, token, data, erstellt_am) VALUES (?, ?, ?, ?)").run(kunde.id, kunde.token, JSON.stringify(kunde), kunde.erstelltAm);
   return kunde;
 }
@@ -86,18 +92,34 @@ export function kundeSpeichern(kunde: Kunde) {
   getDb().prepare("UPDATE kunden SET data = ? WHERE id = ?").run(JSON.stringify(kunde), kunde.id);
 }
 
+/** Liest einen Kunden; Altbestände mit Klartext-IBAN werden dabei einmalig verschlüsselt. */
+function kundeAusZeile(r: Row): Kunde {
+  const k = JSON.parse(r.data as string) as Kunde & { iban?: string };
+  if (k.iban) {
+    k.ibanVerschluesselt = verschluesseln(k.iban);
+    delete k.iban;
+    kundeSpeichern(k);
+  }
+  return k;
+}
+
 export function kundeById(id: string): Kunde | undefined {
   const r = getDb().prepare("SELECT data FROM kunden WHERE id = ?").get(id) as Row | undefined;
-  return r ? (JSON.parse(r.data as string) as Kunde) : undefined;
+  return r ? kundeAusZeile(r) : undefined;
 }
 
 export function kundeByToken(token: string): Kunde | undefined {
   const r = getDb().prepare("SELECT data FROM kunden WHERE token = ?").get(token) as Row | undefined;
-  return r ? (JSON.parse(r.data as string) as Kunde) : undefined;
+  return r ? kundeAusZeile(r) : undefined;
 }
 
 export function alleKunden(): Kunde[] {
-  return (getDb().prepare("SELECT data FROM kunden ORDER BY erstellt_am DESC").all() as Row[]).map((r) => JSON.parse(r.data as string));
+  return (getDb().prepare("SELECT data FROM kunden ORDER BY erstellt_am DESC").all() as Row[]).map(kundeAusZeile);
+}
+
+/** Klartext-IBAN nur für die Übermittlung an den Abschlusskanal. */
+export function ibanKlartext(k: Kunde): string | undefined {
+  return k.ibanVerschluesselt ? entschluesseln(k.ibanVerschluesselt) : undefined;
 }
 
 // Verträge

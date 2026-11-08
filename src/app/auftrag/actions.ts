@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { netzgebietById } from "@/domain/netzgebiet";
-import { auftragErteilen, heute, Prozessfehler } from "@/server/prozess";
+import { auftragErteilen, heute, Prozessfehler, weitereVerbrauchsstelle } from "@/server/prozess";
 import { bestandAusEingabe, parseVergleich } from "../lib/eingabe";
 import { ibanGueltig, ibanMaskieren } from "../lib/iban";
 
@@ -47,8 +47,7 @@ export async function auftragAction(_prev: AuftragState, form: FormData): Promis
   const netz = v.netz ? netzgebietById(v.netz) : undefined;
   if (!netz) return { fehler: ["Netzgebiet fehlt, bitte Vergleich erneut starten."] };
 
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unbekannt";
+  const nachweis = await nachweisErstellen();
   const stand = heute();
 
   let token: string;
@@ -70,7 +69,7 @@ export async function auftragAction(_prev: AuftragState, form: FormData): Promis
       stelle: { sparte: v.sparte, plz: v.plz, strasse: v.strasse, netzgebietId: netz.id, jahresverbrauchKwh: v.verbrauch },
       bestand: bestandAusEingabe(v),
       tarifId: p.tarif,
-      nachweis: { ipHash: createHash("sha256").update(ip).digest("hex").slice(0, 16), userAgent: h.get("user-agent") ?? "" },
+      nachweis,
     });
     token = kunde.token;
   } catch (err) {
@@ -78,4 +77,41 @@ export async function auftragAction(_prev: AuftragState, form: FormData): Promis
     throw err;
   }
   redirect(`/konto/${token}?neu=1`);
+}
+
+async function nachweisErstellen() {
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unbekannt";
+  return { ipHash: createHash("sha256").update(ip).digest("hex").slice(0, 16), userAgent: h.get("user-agent") ?? "" };
+}
+
+const ZusatzSchema = z.object({
+  konto: z.string().min(10),
+  tarif: z.string().min(1),
+  bestaetigung: z.literal("on", { errorMap: () => ({ message: "Bitte Auftrag bestätigen" }) }),
+});
+
+/** Bestandskunde fügt eine weitere Verbrauchsstelle hinzu (z.B. Gas zum bestehenden Strom). */
+export async function zusatzAuftragAction(_prev: AuftragState, form: FormData): Promise<AuftragState> {
+  const roh = Object.fromEntries(form.entries()) as Record<string, string>;
+  const vergleich = parseVergleich(roh);
+  const zusatz = ZusatzSchema.safeParse(roh);
+  if (!vergleich.success || !zusatz.success) {
+    return { fehler: [...(vergleich.success ? [] : vergleich.error.issues), ...(zusatz.success ? [] : zusatz.error.issues)].map((i) => i.message) };
+  }
+  const v = vergleich.data;
+  const netz = v.netz ? netzgebietById(v.netz) : undefined;
+  if (!netz) return { fehler: ["Netzgebiet fehlt, bitte Vergleich erneut starten."] };
+  try {
+    weitereVerbrauchsstelle(zusatz.data.konto, {
+      stelle: { sparte: v.sparte, plz: v.plz, strasse: v.strasse, netzgebietId: netz.id, jahresverbrauchKwh: v.verbrauch },
+      bestand: bestandAusEingabe(v),
+      tarifId: zusatz.data.tarif,
+      nachweis: await nachweisErstellen(),
+    });
+  } catch (err) {
+    if (err instanceof Prozessfehler) return { fehler: [err.message] };
+    throw err;
+  }
+  redirect(`/konto/${zusatz.data.konto}?neu=${v.sparte}`);
 }

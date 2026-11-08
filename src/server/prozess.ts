@@ -9,6 +9,7 @@ import type { BestandsVertrag, Empfehlung, Verbrauchsstelle } from "@/domain/typ
 import { vergleiche } from "@/domain/vergleich";
 import { naechsterStatus, OFFENE_STATUS, type Akteur, type Ereignis, type Modus } from "@/domain/wechselfall";
 import { abschlusskanal, check24Deeplink } from "./kanaele";
+import { transaction } from "./db";
 import * as repo from "./repo";
 import type { Fall, Kunde, Vertrag } from "./repo";
 import { VOLLMACHT_VERSION, vollmachtText } from "./rechtstexte";
@@ -86,29 +87,31 @@ function fallAusEmpfehlung(kunde: Kunde, v: Vertrag, e: Empfehlung, stichtag: st
 // Auftrag
 
 export interface AuftragEingabe {
-  kunde: Omit<Kunde, "id" | "token" | "erstelltAm">;
+  kunde: repo.NeuerKunde;
   stelle: Verbrauchsstelle;
   bestand: BestandsVertrag;
   tarifId: string;
   nachweis: { ipHash: string; userAgent: string };
 }
 
-export function auftragErteilen(e: AuftragEingabe): { kunde: Kunde; fall: Fall } {
+export type ZusatzEingabe = Omit<AuftragEingabe, "kunde">;
+
+const SPARTE_TEXT = { strom: "Strom", gas: "Gas" } as const;
+
+function tarifPruefen(e: ZusatzEingabe, modus: Modus) {
   const tarif = TARIFE.find((t) => t.id === e.tarifId);
   const netz = netzgebietById(e.stelle.netzgebietId);
-  if (!tarif || !netz || tarif.sparte !== e.stelle.sparte) throw new Prozessfehler("Tarif ist für diese Verbrauchsstelle nicht verfügbar.");
-  const kanal = e.kunde.modus === "vollmacht" ? "procheck24" : "check24_affiliate";
+  if (!tarif || !netz || tarif.sparte !== e.stelle.sparte || netz.sparte !== e.stelle.sparte) throw new Prozessfehler("Tarif ist für diese Verbrauchsstelle nicht verfügbar.");
+  if (tarif.netzgebietIds && !tarif.netzgebietIds.includes(netz.id)) throw new Prozessfehler("Tarif ist in diesem Netzgebiet nicht verfügbar.");
+  const kanal = modus === "vollmacht" ? "procheck24" : "check24_affiliate";
   if (!tarif.kanaele.includes(kanal)) throw new Prozessfehler("Tarif ist in diesem Modus nicht abschließbar.");
+  return { tarif, netz };
+}
 
-  const kunde = repo.kundeAnlegen(e.kunde);
+/** Legt Vertrag und ersten Wechselfall an. Der Auftrag selbst ist die Kundenfreigabe für den ersten Wechsel. */
+function ersterWechsel(kunde: Kunde, e: ZusatzEingabe): { vertrag: Vertrag; fall: Fall } {
+  const { tarif, netz } = tarifPruefen(e, kunde.modus);
   const vertrag = repo.vertragAnlegen({ kundeId: kunde.id, aktiv: true, stelle: e.stelle, bestand: e.bestand });
-  repo.protokolliere({ kundeId: kunde.id, typ: "kunde.angelegt", akteur: "kunde", data: { modus: kunde.modus, nachweis: e.nachweis } });
-
-  if (kunde.modus === "vollmacht") {
-    repo.vollmachtSpeichern(kunde.id, VOLLMACHT_VERSION, vollmachtText(kunde), { ...e.nachweis, zeitpunkt: new Date().toISOString() });
-    repo.protokolliere({ kundeId: kunde.id, typ: "vollmacht.erteilt", akteur: "kunde", data: { version: VOLLMACHT_VERSION } });
-  }
-
   const kosten = berechneKosten(tarif, netz, e.stelle.jahresverbrauchKwh);
   const bk = bestandskosten(vertrag);
   const fall = fallAusEmpfehlung(kunde, vertrag, {
@@ -118,21 +121,62 @@ export function auftragErteilen(e: AuftragEingabe): { kunde: Kunde; fall: Fall }
     ersparnisErstesJahr: Math.round((bk - kosten.jahreskostenErstesJahr) * 100) / 100,
     ersparnisOhneBonus: Math.round((bk - kosten.jahreskostenOhneBonus) * 100) / 100,
   }, heute());
-
-  // Der Auftrag selbst ist die Kundenfreigabe für den ersten Wechsel.
   if (kunde.modus === "vollmacht") uebergang(fall, "kunde_freigeben", "kunde", { quelle: "auftrag" });
+  return { vertrag, fall };
+}
 
-  repo.nachrichtSenden(
-    kunde.id,
-    kunde.email,
-    "Willkommen bei Switchandsave",
-    `Hallo ${kunde.vorname},\n\nIhr Auftrag ist eingegangen. ${
-      kunde.modus === "vollmacht"
-        ? `Wir prüfen den Wechsel zu „${tarif.name}“ und übermitteln ihn rechtzeitig zum ${formatDe(fall.fristen.neuerLieferbeginn)}.`
-        : `Schließen Sie den neuen Tarif bequem über unseren Partnerlink ab: ${fall.deeplink}`
-    }\n\nIhr Kundenkonto: ${kontoLink(kunde)}\n\nSie können Ihren Vertrag binnen 14 Tagen widerrufen.`,
-  );
-  return { kunde, fall };
+function naechsterSchrittText(kunde: Kunde, fall: Fall) {
+  const tarif = tarifById(fall.tarifId);
+  return kunde.modus === "vollmacht"
+    ? `Wir prüfen den Wechsel zu „${tarif.name}“ und übermitteln ihn rechtzeitig zum ${formatDe(fall.fristen.neuerLieferbeginn)}.`
+    : `Schließen Sie den neuen Tarif bequem über unseren Partnerlink ab: ${fall.deeplink}`;
+}
+
+export function auftragErteilen(e: AuftragEingabe): { kunde: Kunde; fall: Fall } {
+  tarifPruefen(e, e.kunde.modus);
+  if (e.kunde.modus === "vollmacht" && !e.kunde.iban) throw new Prozessfehler("IBAN fehlt.");
+
+  return transaction(() => {
+    const kunde = repo.kundeAnlegen(e.kunde);
+    repo.protokolliere({ kundeId: kunde.id, typ: "kunde.angelegt", akteur: "kunde", data: { modus: kunde.modus, nachweis: e.nachweis } });
+    if (kunde.modus === "vollmacht") {
+      repo.vollmachtSpeichern(kunde.id, VOLLMACHT_VERSION, vollmachtText(kunde), { ...e.nachweis, zeitpunkt: new Date().toISOString() });
+      repo.protokolliere({ kundeId: kunde.id, typ: "vollmacht.erteilt", akteur: "kunde", data: { version: VOLLMACHT_VERSION } });
+    }
+    const { fall } = ersterWechsel(kunde, e);
+    repo.nachrichtSenden(
+      kunde.id,
+      kunde.email,
+      "Willkommen bei Switchandsave",
+      `Hallo ${kunde.vorname},\n\nIhr Auftrag ist eingegangen. ${naechsterSchrittText(kunde, fall)}\n\nIhr Kundenkonto: ${kontoLink(kunde)}\n\nSie können Ihren Vertrag binnen 14 Tagen widerrufen.`,
+    );
+    return { kunde, fall };
+  });
+}
+
+/**
+ * Bestandskunde nimmt eine weitere Verbrauchsstelle auf (z.B. Gas zusätzlich zu Strom). Persönliche Daten,
+ * Modus, Vollmacht und Dauerauftrag gelten weiter; es wird nichts erneut abgefragt.
+ */
+export function weitereVerbrauchsstelle(token: string, e: ZusatzEingabe): { kunde: Kunde; fall: Fall } {
+  const kunde = repo.kundeByToken(token);
+  if (!kunde) throw new Prozessfehler("Kundenkonto nicht gefunden.");
+  if (kunde.modus === "vollmacht" && !repo.aktiveVollmacht(kunde.id)) throw new Prozessfehler("Keine aktive Vollmacht vorhanden.");
+  const adresse = (s: Verbrauchsstelle) => `${s.sparte}|${s.plz}|${s.strasse.trim().toLowerCase()}`;
+  if (repo.vertraegeVonKunde(kunde.id).some((v) => v.aktiv && adresse(v.stelle) === adresse(e.stelle))) {
+    throw new Prozessfehler(`Für diese Adresse betreuen wir bereits Ihren ${SPARTE_TEXT[e.stelle.sparte]}vertrag.`);
+  }
+  return transaction(() => {
+    const { vertrag, fall } = ersterWechsel(kunde, e);
+    repo.protokolliere({ kundeId: kunde.id, fallId: fall.id, typ: "vertrag.hinzugefuegt", akteur: "kunde", data: { vertragId: vertrag.id, sparte: e.stelle.sparte, nachweis: e.nachweis } });
+    repo.nachrichtSenden(
+      kunde.id,
+      kunde.email,
+      `Ihr ${SPARTE_TEXT[e.stelle.sparte]}vertrag ist jetzt dabei`,
+      `Hallo ${kunde.vorname},\n\nwir betreuen ab sofort auch Ihren ${SPARTE_TEXT[e.stelle.sparte]}vertrag (${e.stelle.strasse}, ${e.stelle.plz}). ${naechsterSchrittText(kunde, fall)}\n\nIhr Kundenkonto: ${kontoLink(kunde)}\n\nSie können diesen Vertrag binnen 14 Tagen widerrufen.`,
+    );
+    return { kunde, fall };
+  });
 }
 
 // Freigaben

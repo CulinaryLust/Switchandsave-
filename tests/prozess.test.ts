@@ -140,3 +140,48 @@ describe("Preiserhöhung", () => {
     expect(neu.fristen.neuerLieferbeginn).toBe("2027-03-15");
   });
 });
+
+describe("Strom und Gas für denselben Kunden", () => {
+  const gasStelle = { sparte: "gas" as const, plz: "10115", strasse: "Invalidenstraße 1", netzgebietId: "gas-berlin", jahresverbrauchKwh: 12000 };
+  const gasBestand = { ...grundversorgung, sparte: "gas" as const, tarifName: "Grundversorgung Gas", arbeitspreisCtBrutto: 12.49, grundpreisEurMonatBrutto: 15.47 };
+  const nachweis = { ipHash: "test", userAgent: "vitest" };
+
+  it("nimmt Gas ohne erneute Dateneingabe auf, mit derselben Vollmacht und eigenem Wechselfall", async () => {
+    const { kunde } = auftrag("vollmacht");
+    const { fall } = p.weitereVerbrauchsstelle(kunde.token, { stelle: gasStelle, bestand: gasBestand, tarifId: "lumen-gas-12", nachweis });
+    expect(fall.kundeId).toBe(kunde.id);
+    expect(fall.status).toBe("kunde_freigegeben");
+    expect(fall.ersparnisErstesJahr).toBeGreaterThan(0);
+    const aktiv = repo.vertraegeVonKunde(kunde.id).filter((v) => v.aktiv).map((v) => v.stelle.sparte).sort();
+    expect(aktiv).toEqual(["gas", "strom"]);
+    expect(repo.alleKunden()).toHaveLength(1);
+    expect(repo.postausgang(kunde.id, 10).map((m) => m.betreff)).toContain("Ihr Gasvertrag ist jetzt dabei");
+    await p.betreiberFreigeben(fall.id, "admin");
+    expect(repo.fallById(fall.id)!.status).toBe("uebermittelt");
+  });
+
+  it("lehnt doppelte Sparte an derselben Adresse, falsche Sparte und unbekannte Konten ab", () => {
+    const { kunde } = auftrag("vollmacht");
+    expect(() => p.weitereVerbrauchsstelle(kunde.token, { stelle, bestand: grundversorgung, tarifId: "lumen-strom-12", nachweis })).toThrow(/bereits/);
+    expect(() => p.weitereVerbrauchsstelle(kunde.token, { stelle: gasStelle, bestand: gasBestand, tarifId: "lumen-strom-12", nachweis })).toThrow(p.Prozessfehler);
+    expect(() => p.weitereVerbrauchsstelle("gibt-es-nicht", { stelle: gasStelle, bestand: gasBestand, tarifId: "lumen-gas-12", nachweis })).toThrow(/nicht gefunden/);
+  });
+
+  it("nimmt nach Widerruf der Vollmacht weitere Verträge nur noch im Erinnerungsmodus auf", () => {
+    const { kunde } = auftrag("vollmacht");
+    p.vollmachtWiderrufen(kunde.token);
+    const { fall } = p.weitereVerbrauchsstelle(kunde.token, { stelle: gasStelle, bestand: gasBestand, tarifId: "lumen-gas-12", nachweis });
+    expect(fall.modus).toBe("erinnerung");
+    expect(fall.deeplink).toBeDefined();
+  });
+});
+
+describe("IBAN-Speicherung", () => {
+  it("legt die IBAN nur verschlüsselt ab und entschlüsselt sie für den Antrag", () => {
+    const { kunde } = auftrag("vollmacht");
+    const gespeichert = repo.kundeById(kunde.id)!;
+    expect(JSON.stringify(gespeichert)).not.toContain("DE02120300000000202051");
+    expect(gespeichert.ibanVerschluesselt).toMatch(/^v1:/);
+    expect(repo.ibanKlartext(gespeichert)).toBe("DE02120300000000202051");
+  });
+});

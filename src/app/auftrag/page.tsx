@@ -2,9 +2,11 @@ import Link from "next/link";
 import { TARIFE, VERSORGER } from "@/domain/demoData";
 import { berechneKosten } from "@/domain/kosten";
 import { netzgebietById } from "@/domain/netzgebiet";
+import * as repo from "@/server/repo";
 import { vollmachtText, WIDERRUFSBELEHRUNG_KURZ } from "@/server/rechtstexte";
 import { eur, parseVergleich } from "../lib/eingabe";
 import { AuftragForm } from "./AuftragForm";
+import { ZusatzForm } from "./ZusatzForm";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,9 @@ export default async function AuftragSeite({ searchParams }: Props) {
   }
   const kosten = berechneKosten(tarif, netz, parsed.data.verbrauch);
   const versorger = VERSORGER.find((v) => v.id === tarif.versorgerId)!;
+  const kunde = query.konto ? repo.kundeByToken(query.konto) : undefined;
+  if (query.konto && !kunde) return <div className="notice bad">Kundenkonto nicht gefunden.</div>;
+  const kanalFehlt = kunde && !tarif.kanaele.includes(kunde.modus === "vollmacht" ? "procheck24" : "check24_affiliate");
 
   return (
     <>
@@ -44,13 +49,22 @@ export default async function AuftragSeite({ searchParams }: Props) {
           <dd>{parsed.data.versorger} (Kündigung übernimmt der neue Versorger)</dd>
         </dl>
       </div>
-      <AuftragForm
+      {kunde && kanalFehlt && (
+        <div className="notice warn">
+          Dieser Tarif ist in Ihrem Servicemodell ({kunde.modus === "vollmacht" ? "Rundum-Service" : "Erinnerungsservice"}) nicht abschließbar.{" "}
+          <Link href={`/vergleich?konto=${kunde.token}&sparte=${parsed.data.sparte}`}>Bitte einen anderen Tarif wählen.</Link>
+        </div>
+      )}
+      {kunde && !kanalFehlt && (
+        <ZusatzForm versteckt={query} vorname={kunde.vorname} modus={kunde.modus} ibanMaskiert={kunde.ibanMaskiert} widerruf={WIDERRUFSBELEHRUNG_KURZ} />
+      )}
+      {!kunde && <AuftragForm
         versteckt={query}
         vollmachtMoeglich={tarif.kanaele.includes("procheck24")}
         erinnerungMoeglich={tarif.kanaele.includes("check24_affiliate")}
         vollmachtText={vollmachtText({ vorname: "[Vorname]", nachname: "[Nachname]" })}
         widerruf={WIDERRUFSBELEHRUNG_KURZ}
-      />
+      />}
     </>
   );
 }

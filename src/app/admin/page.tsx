@@ -7,6 +7,7 @@ import { heute } from "@/server/prozess";
 import * as repo from "@/server/repo";
 import { eur } from "../lib/eingabe";
 import { ablehnen, datumSetzen, freigeben, tageslauf, vorspulen } from "./actions";
+import { logoutAction } from "./login/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,12 @@ export default async function AdminSeite({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <h1>Betreiberbereich</h1>
+      <div className="actions" style={{ justifyContent: "space-between" }}>
+        <h1>Betreiberbereich</h1>
+        <form action={logoutAction}>
+          <button className="btn small secondary">Abmelden</button>
+        </form>
+      </div>
       <p className="muted">
         Stichtag {formatDe(stichtag)} {simuliert && <span className="badge warn">simuliert</span>} · Abschlusskanal {kanal.name}{" "}
         {kanal.simuliert && <span className="badge warn">Simulationsmodus</span>}
@@ -62,7 +68,7 @@ export default async function AdminSeite({ searchParams }: { searchParams: Promi
           const vollmacht = repo.aktiveVollmacht(k.id);
           const pruefung: [string, boolean][] = [
             ["Aktive Vollmacht", !!vollmacht],
-            ["IBAN hinterlegt", !!k.iban],
+            ["IBAN hinterlegt", !!k.ibanVerschluesselt],
             [`Ersparnis ≥ 30 € (${eur(f.ersparnisErstesJahr)})`, f.ersparnisErstesJahr >= 30],
             [`Versorgerbonität ${versorger(t.versorgerId).bonitaet}`, versorger(t.versorgerId).bonitaet !== "C"],
             [`Lieferbeginn ${formatDe(f.fristen.neuerLieferbeginn)} nicht in der Vergangenheit`, f.fristen.neuerLieferbeginn > stichtag],

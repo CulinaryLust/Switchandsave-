@@ -84,3 +84,70 @@ details summary { cursor: pointer; font-weight: 600; }
 dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 0.92rem; }
 dl.kv dt { color: var(--muted); }
 dl.kv dd { margin: 0; }
+
+/* Startseite */
+.vorteile { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 6px; }
+.vorteile li { padding-left: 26px; position: relative; }
+.vorteile li::before { content: ""; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--brand-soft); box-shadow: inset 0 0 0 5px var(--brand); }
+.nav { align-items: center; }
+.nav .btn { color: #fff; }
+.mobil-nav { display: none; position: relative; }
+.mobil-nav summary { list-style: none; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-weight: 600; }
+.mobil-nav summary::-webkit-details-marker { display: none; }
+.mobil-nav > div { position: absolute; right: 0; top: 44px; z-index: 10; display: grid; min-width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / 0.08); }
+.mobil-nav > div a { padding: 12px 16px; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--line); }
+.mobil-nav > div a:last-child { border-bottom: 0; color: var(--brand); font-weight: 600; }
+@media (max-width: 760px) { .mobil-nav { display: block; } }
+
+.rechner { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; }
+.rechner-eingabe { display: grid; gap: 14px; }
+.rechner-ergebnis { background: var(--brand-soft); border-radius: var(--radius); padding: 20px; }
+.rechner-ergebnis .big-number { font-size: 2.6rem; }
+input[type="range"] { padding: 0; accent-color: var(--brand); }
+.segment { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; width: fit-content; }
+.segment button { font: inherit; border: 0; background: var(--surface); padding: 8px 18px; cursor: pointer; color: var(--muted); }
+.segment button[aria-pressed="true"] { background: var(--brand); color: #fff; font-weight: 600; }
+@media (max-width: 760px) { .rechner { grid-template-columns: 1fr; } }
+
+.ablauf ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; position: relative; }
+.ablauf ol::before { content: ""; position: absolute; top: 24px; left: 10%; right: 10%; height: 2px; background: repeating-linear-gradient(90deg, var(--brand) 0 8px, transparent 8px 14px); }
+.ablauf li { position: relative; display: grid; justify-items: center; text-align: center; gap: 6px; }
+.ablauf-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--surface); border: 2px solid var(--brand); color: var(--brand-dark); position: relative; }
+.ablauf-zyklus { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 16px; color: var(--brand-dark); font-weight: 600; font-size: 0.92rem; }
+@media (max-width: 760px) {
+  .ablauf ol { grid-template-columns: 1fr; gap: 16px; }
+  .ablauf ol::before { top: 24px; bottom: 24px; left: 23px; right: auto; width: 2px; height: auto; background: repeating-linear-gradient(180deg, var(--brand) 0 8px, transparent 8px 14px); }
+  .ablauf li { grid-template-columns: 48px 1fr; justify-items: start; text-align: left; column-gap: 12px; row-gap: 0; }
+  .ablauf li .ablauf-icon { grid-row: span 2; }
+  .ablauf-zyklus { justify-content: flex-start; }
+}
+
+.faq { display: grid; gap: 8px; }
+.faq details.card { padding: 14px 18px; }
+
+/* Vergleich: Upload */
+fieldset.upload { border-style: dashed; border-color: var(--brand); background: #fbfdfc; }
+.upload-btn { display: inline-block; position: relative; overflow: hidden; }
+.upload-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+input.ausgelesen, select.ausgelesen { border-color: var(--brand); background: var(--brand-soft); }
+
+.card.zusatz { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-style: dashed; }
+
+/* Mobil: Tarif-Tabelle als Karten */
+@media (max-width: 640px) {
+  table.karten, table.karten tbody, table.karten tr, table.karten td { display: block; width: 100%; }
+  table.karten thead { display: none; }
+  .table-wrap:has(table.karten) { border: 0; overflow: visible; }
+  table.karten { background: transparent; }
+  table.karten tr { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; padding: 8px 0; }
+  table.karten td { border: 0; padding: 4px 16px; }
+  table.karten td[data-label] { display: flex; justify-content: space-between; gap: 12px; text-align: right; }
+  table.karten td[data-label]::before { content: attr(data-label); color: var(--muted); text-align: left; }
+  table.karten td.karten-kopf { padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  table.karten td.karten-aktion:not(:empty) { padding-top: 8px; }
+  table.karten td.karten-aktion .btn { width: 100%; text-align: center; }
+  dl.kv { grid-template-columns: 1fr; gap: 0; }
+  dl.kv dd { margin-bottom: 6px; }
+  main { padding-top: 20px; }
+  .btn { padding: 12px 16px; }
+}
