@@ -2,6 +2,9 @@
 import Link from "next/link";
 import { RANKING_TRANSPARENZ } from "@/server/rechtstexte";
 import { BILDER } from "./bilder";
+import { Ablauf } from "./start/Ablauf";
+import { Ersparnisrechner } from "./start/Ersparnisrechner";
+import { Faq } from "./start/Faq";
 
 export default function Startseite() {
   return (
@@ -13,12 +16,17 @@ export default function Startseite() {
             Switchandsave vergleicht jedes Jahr automatisch, findet den günstigsten seriösen Tarif und kümmert sich um den
             Wechsel. Kostenlos für Sie.
           </p>
+          <ul className="vorteile">
+            <li>Kostenlos und unverbindlich</li>
+            <li>Keine Versorgungslücke beim Wechsel</li>
+            <li>Jeder Abschluss von einem Menschen geprüft</li>
+          </ul>
           <div className="actions">
             <Link className="btn" href="/vergleich">
-              Ersparnis berechnen
+              Rechnung hochladen
             </Link>
-            <Link className="btn secondary" href="#so-funktionierts">
-              So funktioniert&apos;s
+            <Link className="btn secondary" href="#rechner">
+              Ersparnis schätzen
             </Link>
           </div>
         </div>
@@ -30,28 +38,11 @@ export default function Startseite() {
         </figure>
       </section>
 
+      <h2 id="rechner">Was können Sie sparen?</h2>
+      <Ersparnisrechner />
+
       <h2 id="so-funktionierts">So funktioniert&apos;s</h2>
-      <div className="grid-3">
-        <div className="card">
-          <div className="step-num">1</div>
-          <h3>Rechnung abtippen</h3>
-          <p className="muted">PLZ, Verbrauch und Preise aus Ihrer letzten Jahresabrechnung. Dauert drei Minuten.</p>
-        </div>
-        <div className="card">
-          <div className="step-num">2</div>
-          <h3>Ehrlich vergleichen</h3>
-          <p className="muted">
-            Ohne Vorkasse, Kaution, Pakettarife und Bonusfallen. Wir rechnen das erste und das zweite Jahr.
-          </p>
-        </div>
-        <div className="card">
-          <div className="step-num">3</div>
-          <h3>Jedes Jahr automatisch</h3>
-          <p className="muted">
-            Wir überwachen Ihre Fristen und Preiserhöhungen und schlagen rechtzeitig den nächsten Wechsel vor.
-          </p>
-        </div>
-      </div>
+      <Ablauf />
 
       <h2>Zwei Wege, Sie entscheiden</h2>
       <div className="grid-2">
@@ -97,6 +88,9 @@ export default function Startseite() {
           Ausfallrisiko.
         </p>
       </div>
+
+      <h2 id="faq">Häufige Fragen</h2>
+      <Faq />
     </>
   );
 }

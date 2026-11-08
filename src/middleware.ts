@@ -1,16 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SITZUNG_COOKIE, sitzungPruefen } from "@/server/sicherheit/sitzung";
 
-// HTTP Basic Auth für den Betreiberbereich. Für den Livebetrieb durch ein echtes Login mit 2FA ersetzen.
-export function middleware(req: NextRequest) {
-  const user = process.env.ADMIN_USER ?? "admin";
-  const pass = process.env.ADMIN_PASSWORD ?? "switchandsave";
-  const header = req.headers.get("authorization") ?? "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme === "Basic" && encoded) {
-    const [u, ...rest] = atob(encoded).split(":");
-    if (u === user && rest.join(":") === pass) return NextResponse.next();
-  }
-  return new NextResponse("Anmeldung erforderlich", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Switchandsave Admin"' } });
+// Betreiberbereich: nur mit gültiger Sitzung (Passwort plus zweiter Faktor, siehe /admin/login).
+export async function middleware(req: NextRequest) {
+  if (req.nextUrl.pathname === "/admin/login") return NextResponse.next();
+  const benutzer = await sitzungPruefen(req.cookies.get(SITZUNG_COOKIE)?.value).catch(() => null);
+  if (benutzer) return NextResponse.next();
+  const ziel = req.nextUrl.clone();
+  ziel.pathname = "/admin/login";
+  ziel.search = "";
+  return NextResponse.redirect(ziel);
 }
 
 export const config = { matcher: ["/admin/:path*"] };

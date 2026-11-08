@@ -1,89 +1,46 @@
-export default function VergleichSeite() {
+import Link from "next/link";
+import * as repo from "@/server/repo";
+import { auslesenVerfuegbar } from "@/server/rechnung";
+import { VergleichForm } from "./VergleichForm";
+
+export const dynamic = "force-dynamic";
+
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+const eins = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+export default async function VergleichSeite({ searchParams }: Props) {
+  const params = await searchParams;
+  const konto = eins(params.konto);
+  const kunde = konto ? repo.kundeByToken(konto) : undefined;
+  if (konto && !kunde) {
+    return (
+      <div className="notice bad">
+        Kundenkonto nicht gefunden. <Link href="/vergleich">Neuen Vergleich starten</Link>
+      </div>
+    );
+  }
+  const sparte = eins(params.sparte) === "gas" ? "gas" : "strom";
+  const start: Record<string, string> = {};
+  for (const k of ["sparte", "plz", "strasse", "verbrauch", "gv", "versorger", "tarifname", "ap", "gp"]) {
+    const v = eins(params[k]);
+    if (v !== undefined) start[k] = v;
+  }
+  // Demo-Beispielwerte für Gas statt der Strom-Vorgaben.
+  if (sparte === "gas" && !start.ap) Object.assign(start, { verbrauch: start.verbrauch ?? "12000", ap: "12,49", gp: "15,47", tarifname: "Grundversorgung Gas" });
+
   return (
     <>
-      <h1>Ihre aktuelle Rechnung</h1>
-      <p className="lead">Alle Angaben finden Sie auf Ihrer letzten Jahresabrechnung. Preise bitte brutto (inkl. MwSt.).</p>
+      <h1>{kunde ? `${sparte === "gas" ? "Gas" : "Strom"}vertrag hinzufügen` : "Ihre aktuelle Rechnung"}</h1>
+      <p className="lead">
+        {kunde
+          ? `Hallo ${kunde.vorname}, Ihre persönlichen Daten${kunde.modus === "vollmacht" ? " und Ihre Vollmacht" : ""} übernehmen wir. Wir brauchen nur die Angaben aus Ihrer ${sparte === "gas" ? "Gas" : "Strom"}rechnung.`
+          : "Alle Angaben finden Sie auf Ihrer letzten Jahresabrechnung. Preise bitte brutto (inkl. MwSt.)."}
+      </p>
       <div className="notice warn" style={{ marginBottom: 16 }}>
         Demo: Tarifdaten liegen für die PLZ <strong>10115</strong> (Berlin), <strong>80331</strong> (München) und{" "}
         <strong>50999</strong> (Köln, zwei Stromnetzgebiete: z.B. „Hauptstraße“ vs. „Ringstraße“) vor.
       </div>
-      <form className="stack" action="/ergebnis" method="get">
-        <fieldset>
-          <legend>Verbrauchsstelle</legend>
-          <div className="fields">
-            <label>
-              Sparte
-              <select name="sparte" defaultValue="strom">
-                <option value="strom">Strom</option>
-                <option value="gas">Gas</option>
-              </select>
-            </label>
-            <label>
-              PLZ
-              <input name="plz" required pattern="\d{5}" defaultValue="10115" inputMode="numeric" />
-            </label>
-            <label>
-              Straße und Hausnummer
-              <input name="strasse" defaultValue="Invalidenstraße 1" />
-              <span className="hint">Eine PLZ kann mehrere Netzgebiete haben.</span>
-            </label>
-            <label>
-              Jahresverbrauch (kWh)
-              <input name="verbrauch" type="number" min={100} required defaultValue={2500} />
-            </label>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>Aktueller Vertrag</legend>
-          <div className="fields">
-            <label>
-              Versorger
-              <input name="versorger" required defaultValue="Örtlicher Grundversorger" />
-            </label>
-            <label>
-              Tarifname
-              <input name="tarifname" defaultValue="Grundversorgung" />
-            </label>
-            <label>
-              Grundversorgung?
-              <select name="gv" defaultValue="1">
-                <option value="1">Ja</option>
-                <option value="0">Nein, Sondervertrag</option>
-              </select>
-            </label>
-            <label>
-              Arbeitspreis (ct/kWh, brutto)
-              <input name="ap" required inputMode="decimal" defaultValue="40,09" />
-            </label>
-            <label>
-              Grundpreis (€/Monat, brutto)
-              <input name="gp" required inputMode="decimal" defaultValue="20,83" />
-            </label>
-            <label>
-              Lieferbeginn
-              <input name="beginn" type="date" required defaultValue="2019-01-01" />
-            </label>
-            <label>
-              Erstlaufzeit (Monate)
-              <input name="laufzeit" type="number" min={0} max={36} defaultValue={12} />
-            </label>
-            <label>
-              Kündigungsfrist (Wochen)
-              <input name="frist" type="number" min={0} max={13} defaultValue={4} />
-            </label>
-            <label>
-              Bonus fällig am (optional)
-              <input name="bonus" type="date" />
-              <span className="hint">Wir wechseln erst danach, damit Ihr Bonus nicht verfällt.</span>
-            </label>
-          </div>
-        </fieldset>
-        <div>
-          <button className="btn" type="submit">
-            Tarife vergleichen
-          </button>
-        </div>
-      </form>
+      <VergleichForm start={start} konto={kunde ? konto : undefined} spartenFest={!!kunde} auslesenVerfuegbar={auslesenVerfuegbar()} />
     </>
   );
 }

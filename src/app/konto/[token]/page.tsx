@@ -27,6 +27,12 @@ export default async function KontoSeite({ params, searchParams }: Props) {
   const tarif = (id: string) => TARIFE.find((t) => t.id === id)!;
   const versorger = (id: string) => VERSORGER.find((v) => v.id === id)!.name;
   const hidden = <input type="hidden" name="token" value={token} />;
+  const aktiv = vertraege.filter((v) => v.aktiv);
+  const fehlendeSparten = (["strom", "gas"] as const).filter((sp) => !aktiv.some((v) => v.stelle.sparte === sp));
+  const adresse = aktiv[0]?.stelle;
+  const zusatzLink = (sp: "strom" | "gas") =>
+    `/vergleich?${new URLSearchParams({ konto: token, sparte: sp, ...(adresse ? { plz: adresse.plz, strasse: adresse.strasse } : {}) })}`;
+  const SPARTE = { strom: "Strom", gas: "Gas" } as const;
 
   return (
     <>
@@ -34,7 +40,18 @@ export default async function KontoSeite({ params, searchParams }: Props) {
       <p className="muted">
         {kunde.modus === "vollmacht" ? "Rundum-Service mit Vollmacht" : "Erinnerungsservice"} · Stand {formatDe(heute())}
       </p>
-      {neu && <div className="notice">Ihr Auftrag ist eingegangen. Diese Seite ist Ihr persönliches Kundenkonto; den Link haben wir Ihnen auch per E-Mail geschickt.</div>}
+      {neu === "1" && (
+        <div className="notice">
+          Ihr Auftrag ist eingegangen. Diese Seite ist Ihr persönliches Kundenkonto; den Link haben wir Ihnen auch per E-Mail geschickt.
+          {fehlendeSparten.length > 0 && (
+            <>
+              {" "}
+              Sie haben auch einen {SPARTE[fehlendeSparten[0]]}vertrag? <a href={zusatzLink(fehlendeSparten[0])}>In zwei Minuten hinzufügen.</a>
+            </>
+          )}
+        </div>
+      )}
+      {(neu === "strom" || neu === "gas") && <div className="notice">Ihr {SPARTE[neu]}vertrag ist jetzt dabei. Wir kümmern uns um beide Verträge.</div>}
       {meldung && <div className={`notice ${meldung.startsWith("Fehler") ? "bad" : ""}`} style={{ marginTop: 8 }}>{meldung}</div>}
 
       <h2>Wechsel</h2>
@@ -159,6 +176,24 @@ export default async function KontoSeite({ params, searchParams }: Props) {
           </div>
         ))}
       </div>
+
+      {fehlendeSparten.length > 0 && (
+        <div className="card zusatz" style={{ marginTop: 16 }}>
+          <div>
+            <h3>Auch {fehlendeSparten.map((sp) => SPARTE[sp]).join(" und ")} wechseln?</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Ihre Daten{kunde.modus === "vollmacht" ? ", Vollmacht und Dauerauftrag" : ""} übernehmen wir. Sie brauchen nur die Angaben der Rechnung, gern auch als Foto.
+            </p>
+          </div>
+          <div className="actions">
+            {fehlendeSparten.map((sp) => (
+              <a key={sp} className="btn small" href={zusatzLink(sp)}>
+                {SPARTE[sp]}vertrag hinzufügen
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {kunde.modus === "vollmacht" && (
         <>

@@ -18,6 +18,15 @@ services:
         generateValue: true
       - key: CRON_SECRET
         generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      # Lokal mit "npm run einrichten" erzeugen und hier eintragen (siehe DEPLOY.md)
+      - key: ADMIN_TOTP_SECRET
+        sync: false
+      - key: DATA_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: APP_URL
         sync: false
       - key: CHECK24_PARTNER_ID

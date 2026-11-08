@@ -118,7 +118,7 @@ export default async function ErgebnisSeite({ searchParams }: Props) {
       </div>
 
       <div className="table-wrap">
-        <table>
+        <table className="karten">
           <thead>
             <tr>
               <th>Tarif</th>
@@ -136,7 +136,7 @@ export default async function ErgebnisSeite({ searchParams }: Props) {
               const bonusAnteil = emp.kosten.bonusImErstenJahr / emp.kosten.jahreskostenOhneBonus;
               return (
                 <tr key={emp.tarif.id}>
-                  <td>
+                  <td className="karten-kopf">
                     <strong>{emp.tarif.name}</strong>
                     <div className="hint">
                       {emp.versorger.name} · {emp.tarif.erstlaufzeitMonate <= 1 ? "monatlich kündbar" : `${emp.tarif.erstlaufzeitMonate} Mon. Laufzeit`}
@@ -149,15 +149,15 @@ export default async function ErgebnisSeite({ searchParams }: Props) {
                       {emp.versorger.bonitaet === "B" && <span className="badge gray">Bonität: mittel</span>}
                     </div>
                   </td>
-                  <td className="num">{ct(emp.kosten.arbeitspreisCtBrutto)}</td>
-                  <td className="num">{eur(emp.kosten.grundpreisEurJahrBrutto)}</td>
-                  <td className="num">{emp.kosten.bonusImErstenJahr ? eur(emp.kosten.bonusImErstenJahr) : "–"}</td>
-                  <td className="num">
+                  <td className="num" data-label="Arbeitspreis">{ct(emp.kosten.arbeitspreisCtBrutto)}</td>
+                  <td className="num" data-label="Grundpreis/Jahr">{eur(emp.kosten.grundpreisEurJahrBrutto)}</td>
+                  <td className="num" data-label="Bonus">{emp.kosten.bonusImErstenJahr ? eur(emp.kosten.bonusImErstenJahr) : "–"}</td>
+                  <td className="num" data-label="Kosten 1. Jahr">
                     <strong>{eur(emp.kosten.jahreskostenErstesJahr)}</strong>
                   </td>
-                  <td className="num">{eur(emp.kosten.jahreskostenZweitesJahr)}</td>
-                  <td className="num">{eur(e.basis === "erstesJahr" ? emp.ersparnisErstesJahr : emp.ersparnisOhneBonus)}</td>
-                  <td>
+                  <td className="num" data-label="Prognose 2. Jahr">{eur(emp.kosten.jahreskostenZweitesJahr)}</td>
+                  <td className="num" data-label="Ersparnis">{eur(e.basis === "erstesJahr" ? emp.ersparnisErstesJahr : emp.ersparnisOhneBonus)}</td>
+                  <td className="karten-aktion">
                     {emp.ersparnisErstesJahr > 0 && (
                       <Link className="btn small" href={`/auftrag?${toQuery({ ...query, netz: netz.id, tarif: emp.tarif.id })}`}>
                         Wechseln

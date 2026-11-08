@@ -5,19 +5,20 @@ import { redirect } from "next/navigation";
 import { UngueltigerUebergang } from "@/domain/wechselfall";
 import * as p from "@/server/prozess";
 import * as repo from "@/server/repo";
+import { betreiberPruefen } from "@/server/sicherheit/admin";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "");
-const BETREIBER = "admin";
 
 function zurueck(meldung: string): never {
   revalidatePath("/admin");
   redirect(`/admin?meldung=${encodeURIComponent(meldung)}`);
 }
 
-async function ausfuehren(fn: () => Promise<string> | string): Promise<never> {
+async function ausfuehren(fn: (betreiber: string) => Promise<string> | string): Promise<never> {
+  const betreiber = await betreiberPruefen();
   let meldung: string;
   try {
-    meldung = await fn();
+    meldung = await fn(betreiber);
   } catch (e) {
     if (e instanceof p.Prozessfehler || e instanceof UngueltigerUebergang) zurueck(`Fehler: ${e.message}`);
     throw e;
@@ -26,16 +27,16 @@ async function ausfuehren(fn: () => Promise<string> | string): Promise<never> {
 }
 
 export async function freigeben(f: FormData) {
-  await ausfuehren(async () => {
-    await p.betreiberFreigeben(s(f, "fall"), BETREIBER);
+  await ausfuehren(async (betreiber) => {
+    await p.betreiberFreigeben(s(f, "fall"), betreiber);
     const fall = repo.fallById(s(f, "fall"))!;
     return fall.status === "uebermittelt" ? `Freigegeben und übermittelt (${fall.externeReferenz}).` : "Freigegeben. Übermittlung ist terminiert.";
   });
 }
 
 export async function ablehnen(f: FormData) {
-  await ausfuehren(() => {
-    p.betreiberAblehnen(s(f, "fall"), BETREIBER, s(f, "grund") || "ohne Angabe");
+  await ausfuehren((betreiber) => {
+    p.betreiberAblehnen(s(f, "fall"), betreiber, s(f, "grund") || "ohne Angabe");
     return "Abgelehnt, Kunde wurde informiert.";
   });
 }

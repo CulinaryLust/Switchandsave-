@@ -18,9 +18,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="nav">
               <Link href="/#so-funktionierts">So funktioniert&apos;s</Link>
+              <Link href="/#faq">Fragen</Link>
               <Link href="/#transparenz">Transparenz</Link>
-              <Link href="/vergleich">Jetzt vergleichen</Link>
+              <Link className="btn small" href="/vergleich">
+                Jetzt vergleichen
+              </Link>
             </nav>
+            <details className="mobil-nav">
+              <summary aria-label="Menü">Menü</summary>
+              <div>
+                <Link href="/#so-funktionierts">So funktioniert&apos;s</Link>
+                <Link href="/#rechner">Ersparnis schätzen</Link>
+                <Link href="/#faq">Häufige Fragen</Link>
+                <Link href="/vergleich">Jetzt vergleichen</Link>
+              </div>
+            </details>
           </div>
         </header>
         <main>

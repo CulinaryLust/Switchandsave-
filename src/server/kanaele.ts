@@ -2,7 +2,7 @@
 // ausgetauscht oder ergänzt werden kann, ohne Prozesslogik anzufassen.
 import { randomBytes } from "node:crypto";
 import type { Tarif, Verbrauchsstelle } from "@/domain/types";
-import type { Kunde } from "./repo";
+import { ibanKlartext, type Kunde } from "./repo";
 
 export interface Antrag {
   kunde: Kunde;
@@ -57,7 +57,7 @@ export class Procheck24Kanal implements Abschlusskanal {
         lieferbeginn: a.wunschLieferbeginn,
         verbrauchKwh: a.stelle.jahresverbrauchKwh,
         lieferadresse: { plz: a.stelle.plz, strasse: a.stelle.strasse },
-        kunde: { anrede: a.kunde.anrede, vorname: a.kunde.vorname, nachname: a.kunde.nachname, email: a.kunde.email, geburtsdatum: a.kunde.geburtsdatum, iban: a.kunde.iban },
+        kunde: { anrede: a.kunde.anrede, vorname: a.kunde.vorname, nachname: a.kunde.nachname, email: a.kunde.email, geburtsdatum: a.kunde.geburtsdatum, iban: ibanKlartext(a.kunde) },
         altversorger: a.altversorger,
         kuendigungDurchNeuversorger: a.kuendigungDurchNeuversorger,
       }),
